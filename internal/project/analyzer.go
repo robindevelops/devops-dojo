@@ -9,57 +9,74 @@ import (
 // Stack represents the detected technologies in the user's project
 type Stack struct {
 	HasDocker        bool
-	HasKubernetes    bool
-	HasGitHubActions bool
 	Dockerfiles      []string
+	HasKubernetes    bool
 	K8sManifests     []string
+	HasGitHubActions bool
+	HasTerraform     bool
+	TerraformFiles   []string
 }
 
 // Analyze scans the given directory path to detect the project stack
-func Analyze(dirPath string) (*Stack, error) {
+func Analyze(dirPath string, focus string) (*Stack, error) {
 	stack := &Stack{
 		Dockerfiles:  []string{},
 		K8sManifests: []string{},
+		TerraformFiles: []string{},
 	}
 
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-
-		// Skip .git directory to speed up scanning
-		if info.IsDir() && info.Name() == ".git" {
-			return filepath.SkipDir
+		
+		if info.IsDir() {
+			// Skip typical ignore dirs
+			if info.Name() == ".git" || info.Name() == "node_modules" || info.Name() == ".dojo_backup" || info.Name() == ".terraform" {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 
-		if !info.IsDir() {
-			// Detect Docker
-			if info.Name() == "Dockerfile" || strings.HasSuffix(info.Name(), ".Dockerfile") {
-				stack.HasDocker = true
-				stack.Dockerfiles = append(stack.Dockerfiles, path)
-			}
-
-			// Detect Kubernetes Manifests (YAML/YML)
-			if strings.HasSuffix(info.Name(), ".yaml") || strings.HasSuffix(info.Name(), ".yml") {
-				// Simple heuristic: check if it's in a k8s dir or might be a k8s manifest
-				// In a real implementation, we'd parse the YAML to check for apiVersion/kind
-				content, err := os.ReadFile(path)
-				if err == nil {
-					if strings.Contains(string(content), "apiVersion:") && strings.Contains(string(content), "kind:") {
-						stack.HasKubernetes = true
-						stack.K8sManifests = append(stack.K8sManifests, path)
-					}
-				}
-			}
-
-			// Detect GitHub Actions
-			if strings.Contains(path, ".github/workflows") {
+		baseName := filepath.Base(path)
+		
+		if strings.Contains(strings.ToLower(baseName), "dockerfile") {
+			stack.HasDocker = true
+			stack.Dockerfiles = append(stack.Dockerfiles, path)
+		} else if strings.HasSuffix(baseName, ".yaml") || strings.HasSuffix(baseName, ".yml") {
+			// Naive check for K8s vs other yaml
+			if !strings.Contains(path, ".github/workflows") {
+				stack.HasKubernetes = true
+				stack.K8sManifests = append(stack.K8sManifests, path)
+			} else {
 				stack.HasGitHubActions = true
 			}
+		} else if strings.HasSuffix(baseName, ".tf") {
+			stack.HasTerraform = true
+			stack.TerraformFiles = append(stack.TerraformFiles, path)
 		}
-
 		return nil
 	})
+
+	// Apply focus filter if provided
+	if focus != "" {
+		focusLower := strings.ToLower(focus)
+		if focusLower != "kubernetes" && focusLower != "k8s" {
+			stack.HasKubernetes = false
+			stack.K8sManifests = nil
+		}
+		if focusLower != "docker" {
+			stack.HasDocker = false
+			stack.Dockerfiles = nil
+		}
+		if focusLower != "github-actions" && focusLower != "ci" {
+			stack.HasGitHubActions = false
+		}
+		if focusLower != "terraform" && focusLower != "tf" {
+			stack.HasTerraform = false
+			stack.TerraformFiles = nil
+		}
+	}
 
 	return stack, err
 }

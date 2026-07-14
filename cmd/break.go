@@ -11,6 +11,7 @@ import (
 )
 
 var level string
+var focus string
 
 var breakCmd = &cobra.Command{
 	Use:   "break",
@@ -23,7 +24,7 @@ var breakCmd = &cobra.Command{
 		// Simulate deep scan for effect
 		time.Sleep(1 * time.Second)
 		
-		stack, err := project.Analyze(".")
+		stack, err := project.Analyze(".", focus)
 		s.Stop()
 
 		if err != nil {
@@ -58,4 +59,5 @@ var breakCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(breakCmd)
 	breakCmd.Flags().StringVarP(&level, "level", "l", "medium", "Difficulty level (easy, medium, hard, extreme)")
+	breakCmd.Flags().StringVar(&focus, "focus", "", "Target specific stack (docker, kubernetes, github-actions)")
 }

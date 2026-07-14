@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/manifoldco/promptui"
+	"github.com/devops-dojo/cli/internal/colors"
 	"github.com/devops-dojo/cli/internal/engine/scenarios"
 )
 
@@ -25,64 +26,84 @@ var rootCmd = &cobra.Command{
 DevOps Dojo is a CLI tool that injects production-grade failures into your pipeline or infrastructure for training purposes.
 You can use it in sandbox mode or point it at your own project (BYOP) to break your own configurations.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(dojoLogo)
-		fmt.Println("Welcome to DevOps Dojo! Choose an action to begin:")
+		fmt.Println(colors.Colorize(colors.Cyan, dojoLogo))
+		fmt.Println(colors.Colorize(colors.Green, "Welcome to DevOps Dojo! Choose an action to begin:"))
 		
-		prompt := promptui.Select{
-			Label: "Select Action",
-			Items: []string{
-				"Start Sandbox Scenario",
-				"Break Current Project (BYOP Mode)",
-				"Verify Fix",
-				"Get a Hint",
-				"Show Help & Commands",
-				"Exit",
-			},
-		}
-
-		_, result, err := prompt.Run()
-		if err != nil {
-			fmt.Printf("Prompt failed %v\n", err)
-			return
-		}
-
-		switch result {
-		case "Start Sandbox Scenario":
-			// Fetch the catalog dynamically
-			incidents := scenarios.GetAvailableIncidents()
-			var items []string
-			for _, inc := range incidents {
-				items = append(items, fmt.Sprintf("%s (%s)", inc.Name, inc.Difficulty))
+		for {
+			prompt := promptui.Select{
+				Label: "Select Action",
+				Items: []string{
+					"Start Sandbox Scenario",
+					"Break Current Project (BYOP Mode)",
+					"Verify Fix",
+					"Get a Hint",
+					"View Stats",
+					"Restore Project (Undo Break)",
+					"Show Help & Commands",
+					"Exit",
+				},
+				Size: 10,
 			}
-			items = append(items, "Cancel")
 
-			scenarioPrompt := promptui.Select{
-				Label: "Select Scenario",
-				Items: items,
-				Size:  10,
+			_, result, err := prompt.Run()
+			if err != nil {
+				fmt.Printf("Prompt failed %v\n", err)
+				return
 			}
-			idx, scenario, _ := scenarioPrompt.Run()
-			if scenario != "Cancel" {
+
+			switch result {
+			case "Start Sandbox Scenario":
+				// Fetch the catalog dynamically
+				incidents := scenarios.GetAvailableIncidents()
+				var items []string
+				for _, inc := range incidents {
+					items = append(items, fmt.Sprintf("%s (%s)", inc.Name, inc.Difficulty))
+				}
+				items = append(items, "Back")
+
+				scenarioPrompt := promptui.Select{
+					Label: "Select Scenario",
+					Items: items,
+					Size:  10,
+				}
+				idx, scenario, _ := scenarioPrompt.Run()
+				if scenario == "Back" {
+					continue
+				}
 				startCmd.Run(startCmd, []string{incidents[idx].ID})
+				return
+			case "Break Current Project (BYOP Mode)":
+				levelPrompt := promptui.Select{
+					Label: "Select Difficulty Level",
+					Items: []string{"easy", "medium", "hard", "extreme", "Back"},
+				}
+				_, levelResult, _ := levelPrompt.Run()
+				if levelResult == "Back" {
+					continue
+				}
+				// Override level for break command
+				level = levelResult
+				breakCmd.Run(breakCmd, []string{})
+				return
+			case "Verify Fix":
+				verifyCmd.Run(verifyCmd, []string{})
+				return
+			case "Get a Hint":
+				hintCmd.Run(hintCmd, []string{})
+				return
+			case "View Stats":
+				statsCmd.Run(statsCmd, []string{})
+				// Do not return here; let the user read stats and pick another action
+			case "Restore Project (Undo Break)":
+				restoreCmd.Run(restoreCmd, []string{})
+				return
+			case "Show Help & Commands":
+				cmd.Help()
+				// Do not return here; let the user read help and pick another action
+			case "Exit":
+				fmt.Println("Goodbye, Chaos Master!")
+				os.Exit(0)
 			}
-		case "Break Current Project (BYOP Mode)":
-			levelPrompt := promptui.Select{
-				Label: "Select Difficulty Level",
-				Items: []string{"easy", "medium", "hard", "extreme"},
-			}
-			_, levelResult, _ := levelPrompt.Run()
-			// Override level for break command
-			level = levelResult
-			breakCmd.Run(breakCmd, []string{})
-		case "Verify Fix":
-			verifyCmd.Run(verifyCmd, []string{})
-		case "Get a Hint":
-			hintCmd.Run(hintCmd, []string{})
-		case "Show Help & Commands":
-			cmd.Help()
-		case "Exit":
-			fmt.Println("Goodbye, Chaos Master!")
-			os.Exit(0)
 		}
 	},
 }

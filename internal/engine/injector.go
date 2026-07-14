@@ -5,9 +5,13 @@ import (
 	"os"
 	"strings"
 	"path/filepath"
+	"time"
 
+	"github.com/manifoldco/promptui"
+	"github.com/devops-dojo/cli/internal/colors"
 	"github.com/devops-dojo/cli/internal/engine/scenarios"
 	"github.com/devops-dojo/cli/internal/project"
+	"github.com/devops-dojo/cli/internal/session"
 )
 
 type Injector struct {
@@ -19,45 +23,76 @@ func NewInjector(stack *project.Stack) *Injector {
 }
 
 func (i *Injector) InjectFailure(level scenarios.Difficulty) error {
-	fmt.Printf("Preparing to inject a %s level failure...\n", level)
-	
-	// Create backup
-	err := i.backupFiles()
-	if err != nil {
-		return fmt.Errorf("failed to create backup: %w", err)
-	}
+	var targetFile string
+	var injectionFunc func(string) error
 
-	// For demonstration, if we have K8s manifests, inject a typo for Easy level
+	// Determine injection target based on stack
 	if i.Stack.HasKubernetes && len(i.Stack.K8sManifests) > 0 {
-		manifest := i.Stack.K8sManifests[0]
-		fmt.Printf("Targeting Kubernetes manifest: %s\n", manifest)
-		
+		targetFile = i.Stack.K8sManifests[0]
 		if level == scenarios.Easy {
-			return injectK8sTypo(manifest)
-		} else if level == scenarios.Medium {
-			return injectOOMKilled(manifest)
+			injectionFunc = injectK8sTypo
+		} else {
+			injectionFunc = injectOOMKilled
 		}
+	} else if i.Stack.HasDocker && len(i.Stack.Dockerfiles) > 0 {
+		targetFile = i.Stack.Dockerfiles[0]
+		injectionFunc = injectDockerFailure
+	} else if i.Stack.HasTerraform && len(i.Stack.TerraformFiles) > 0 {
+		targetFile = i.Stack.TerraformFiles[0]
+		injectionFunc = injectTerraformFailure
+	} else {
+		return fmt.Errorf("no suitable targets found for failure injection in this project")
 	}
 
-	// Fallback to Docker
-	if i.Stack.HasDocker && len(i.Stack.Dockerfiles) > 0 {
-		dockerfile := i.Stack.Dockerfiles[0]
-		fmt.Printf("Targeting Dockerfile: %s\n", dockerfile)
-		return injectDockerFailure(dockerfile)
+	// Blast Radius Confirmation
+	fmt.Println(colors.Colorize(colors.Red, "\n⚠️  BLAST RADIUS WARNING ⚠️"))
+	fmt.Println(colors.Colorize(colors.Yellow, "Dojo will mutate the following file in your project:"))
+	fmt.Printf(" -> %s\n\n", colors.Colorize(colors.Cyan, targetFile))
+
+	prompt := promptui.Prompt{
+		Label:     "Do you want to proceed and inject this failure",
+		IsConfirm: true,
+	}
+	
+	result, err := prompt.Run()
+	if err != nil || (result != "y" && result != "Y" && result != "") { // empty string is often accepted as 'y' in Confirm but promptui usually returns err on abort
+		return fmt.Errorf("injection cancelled by user")
 	}
 
-	return fmt.Errorf("no suitable targets found for failure injection in this project")
+	// Create strict backup before mutating
+	fmt.Println("Creating snapshot...")
+	err = i.backupFiles([]string{targetFile})
+	if err != nil {
+		return fmt.Errorf("failed to create backup (aborting injection for safety): %w", err)
+	}
+
+	err = injectionFunc(targetFile)
+	if err != nil {
+		return err
+	}
+
+	// Save session state
+	incidentID := string(level) + "-break" // Need a better ID mapper later
+	err = session.SaveState(&session.State{
+		ActiveIncidentID:     incidentID,
+		StartTime:            time.Now(),
+		VerificationAttempts: 0,
+		HintLevel:            0,
+	})
+	if err != nil {
+		fmt.Printf("⚠️  Warning: Failed to save session state: %v\n", err)
+	}
+	return nil
 }
 
-func (i *Injector) backupFiles() error {
-	// Simple backup: Create a .dojo_backup dir
-	os.Mkdir(".dojo_backup", 0755)
-	
-	for _, f := range i.Stack.K8sManifests {
-		copyFile(f, filepath.Join(".dojo_backup", filepath.Base(f)))
-	}
-	for _, f := range i.Stack.Dockerfiles {
-		copyFile(f, filepath.Join(".dojo_backup", filepath.Base(f)))
+func (i *Injector) backupFiles(targets []string) error {
+	for _, f := range targets {
+		dst := filepath.Join(".dojo_backup", f)
+		os.MkdirAll(filepath.Dir(dst), 0755)
+		err := copyFile(f, dst)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -90,7 +125,21 @@ func injectDockerFailure(filePath string) error {
 	return os.WriteFile(filePath, []byte(broken), 0644)
 }
 
-func copyFile(src, dst string) {
-	input, _ := os.ReadFile(src)
-	os.WriteFile(dst, input, 0644)
+func copyFile(src, dst string) error {
+	input, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, input, 0644)
+}
+
+func injectTerraformFailure(filePath string) error {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+	
+	// Inject invalid syntax at the top
+	broken := "resource \"aws_s3_bucket\" \"broken\" {\n  bucket = \"my-bucket\"\n  # DOJO INJECTED FAILURE (Missing closing brace)\n\n" + string(content)
+	return os.WriteFile(filePath, []byte(broken), 0644)
 }

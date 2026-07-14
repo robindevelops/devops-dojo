@@ -88,5 +88,21 @@ func GetAvailableIncidents() []Incident {
 			Difficulty:  Hard,
 			TargetType:  "github-actions",
 		},
+		
+		// Terraform Scenarios
+		{
+			ID:          "tf-syntax-error",
+			Name:        "[Terraform] Invalid Syntax",
+			Description: "Injects a subtle missing bracket or invalid HCL syntax.",
+			Difficulty:  Easy,
+			TargetType:  "terraform",
+		},
+		{
+			ID:          "tf-missing-var",
+			Name:        "[Terraform] Missing Required Variable",
+			Description: "Removes a required variable definition, causing terraform plan to fail.",
+			Difficulty:  Medium,
+			TargetType:  "terraform",
+		},
 	}
 }

@@ -6,6 +6,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/devops-dojo/cli/internal/project"
 	"github.com/devops-dojo/cli/internal/engine"
+	"github.com/devops-dojo/cli/internal/session"
+	"github.com/devops-dojo/cli/internal/colors"
 	"github.com/briandowns/spinner"
 )
 
@@ -19,7 +21,7 @@ var verifyCmd = &cobra.Command{
 		
 		time.Sleep(1500 * time.Millisecond) // Simulate deep verification
 		
-		stack, err := project.Analyze(".")
+		stack, err := project.Analyze(".", "")
 		if err != nil {
 			s.Stop()
 			fmt.Printf("❌ Error analyzing project: %v\n", err)
@@ -31,14 +33,43 @@ var verifyCmd = &cobra.Command{
 		s.Stop()
 		
 		if err != nil {
-			fmt.Printf("❌ Error during verification: %v\n", err)
+			fmt.Println(colors.Colorize(colors.Red, fmt.Sprintf("❌ Error during verification: %v", err)))
 			return
 		}
 
 		if fixed {
-			fmt.Println("🎉 Congratulations! You have successfully resolved the incident. You are a Chaos Master!")
+			fmt.Println(colors.Colorize(colors.Green, "\n🎉 Congratulations! You have successfully resolved the incident. You are a Chaos Master!"))
+			
+			// Scoring logic
+			state, err := session.LoadState()
+			if err == nil && state != nil {
+				timeElapsed := time.Since(state.StartTime).Minutes()
+				baseScore := 100
+				
+				// Deduct points based on time
+				timePenalty := int(timeElapsed) * 2
+				hintPenalty := state.HintLevel * 10
+				
+				finalScore := baseScore - timePenalty - hintPenalty
+				if finalScore < 10 {
+					finalScore = 10 // minimum points
+				}
+
+				fmt.Printf("⏱️  Time to resolve: %.1f minutes\n", timeElapsed)
+				fmt.Printf("💡 Hints used: %d (-%d points)\n", state.HintLevel, hintPenalty)
+				fmt.Printf("🏆 Points Earned: %d\n", finalScore)
+
+				session.AddScore(finalScore, state.HintLevel)
+				session.ClearState() // End the active session
+			}
 		} else {
-			fmt.Println("❌ The issue is not fully resolved yet. Keep investigating! Type 'dojo hint' if you get stuck.")
+			// Increment verification attempts
+			state, err := session.LoadState()
+			if err == nil && state != nil {
+				state.VerificationAttempts++
+				session.SaveState(state)
+			}
+			fmt.Println(colors.Colorize(colors.Red, "\n❌ The issue is not fully resolved yet. Keep investigating! Type 'dojo hint' if you get stuck."))
 		}
 	},
 }
