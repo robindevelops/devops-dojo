@@ -20,26 +20,73 @@ type Incident struct {
 // GetAvailableIncidents returns a catalog of pre-defined failures that Dojo can inject
 func GetAvailableIncidents() []Incident {
 	return []Incident{
+		// Kubernetes Scenarios
 		{
-			ID:          "k8s-oom",
-			Name:        "OOMKilled Pod",
-			Description: "Sets memory limits drastically low causing the pod to crash with OOMKilled",
+			ID:          "k8s-oomkilled",
+			Name:        "[K8s] OOMKilled Pod",
+			Description: "Sets memory limits drastically low, causing the pod to crash with OOMKilled under load.",
 			Difficulty:  Medium,
 			TargetType:  "kubernetes",
 		},
 		{
-			ID:          "docker-zombie",
-			Name:        "Zombie Build Stage",
-			Description: "Removes a crucial dependency in the final Docker image stage",
+			ID:          "k8s-imagepullbackoff",
+			Name:        "[K8s] ImagePullBackOff",
+			Description: "Simulates a typo in the container image tag or missing pull secrets.",
+			Difficulty:  Easy,
+			TargetType:  "kubernetes",
+		},
+		{
+			ID:          "k8s-crashloop",
+			Name:        "[K8s] CrashLoopBackOff",
+			Description: "Removes a critical environment variable required by the application to start.",
+			Difficulty:  Medium,
+			TargetType:  "kubernetes",
+		},
+		{
+			ID:          "k8s-service-selector",
+			Name:        "[K8s] Unroutable Service",
+			Description: "Changes the Service selector label to mismatch the Deployment pods (classic 502/504 error).",
+			Difficulty:  Hard,
+			TargetType:  "kubernetes",
+		},
+		{
+			ID:          "k8s-liveness-timeout",
+			Name:        "[K8s] Liveness Probe Failure",
+			Description: "Sets the liveness probe timeout too low, causing Kubernetes to constantly restart healthy pods.",
+			Difficulty:  Extreme,
+			TargetType:  "kubernetes",
+		},
+		
+		// Docker Scenarios
+		{
+			ID:          "docker-missing-deps",
+			Name:        "[Docker] Zombie Runtime",
+			Description: "Removes a crucial system dependency (like ca-certificates or libc) in the final image stage.",
 			Difficulty:  Hard,
 			TargetType:  "docker",
 		},
 		{
-			ID:          "k8s-typo",
-			Name:        "Manifest Typo",
-			Description: "Introduces a YAML syntax error or invalid field in a manifest",
+			ID:          "docker-permissions",
+			Name:        "[Docker] Permission Denied",
+			Description: "Changes the USER instruction, causing the entrypoint script to fail due to lack of file permissions.",
+			Difficulty:  Medium,
+			TargetType:  "docker",
+		},
+		
+		// CI/CD Scenarios
+		{
+			ID:          "ci-missing-secret",
+			Name:        "[CI/CD] Missing Deployment Secret",
+			Description: "Alters the pipeline YAML to reference an undefined repository secret.",
 			Difficulty:  Easy,
-			TargetType:  "kubernetes",
+			TargetType:  "github-actions",
+		},
+		{
+			ID:          "ci-test-flake",
+			Name:        "[CI/CD] Flaky Tests Config",
+			Description: "Removes cache configurations, causing pipeline times to skyrocket and tests to randomly timeout.",
+			Difficulty:  Hard,
+			TargetType:  "github-actions",
 		},
 	}
 }
