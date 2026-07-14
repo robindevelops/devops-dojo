@@ -8,6 +8,7 @@ import (
 	"github.com/manifoldco/promptui"
 	"github.com/devops-dojo/cli/internal/colors"
 	"github.com/devops-dojo/cli/internal/engine/scenarios"
+	"github.com/devops-dojo/cli/internal/db"
 )
 
 const dojoLogo = `
@@ -53,6 +54,31 @@ You can use it in sandbox mode or point it at your own project (BYOP) to break y
 
 			switch result {
 			case "Start Sandbox Scenario":
+				// Prompt for Practice Mode
+				modePrompt := promptui.Select{
+					Label: "Select Practice Mode",
+					Items: []string{
+						"Normal (Hints allowed)",
+						"Timed Challenge (5 Minutes, no hints)",
+						"Blind Debugging (No hints)",
+						"Interview Mode (AI Interviewer)",
+						"Back",
+					},
+				}
+				_, modeChoice, _ := modePrompt.Run()
+				if modeChoice == "Back" {
+					continue
+				}
+
+				modeStr := "normal"
+				if modeChoice == "Timed Challenge (5 Minutes, no hints)" {
+					modeStr = "timed"
+				} else if modeChoice == "Blind Debugging (No hints)" {
+					modeStr = "blind"
+				} else if modeChoice == "Interview Mode (AI Interviewer)" {
+					modeStr = "interview"
+				}
+
 				// Fetch the catalog dynamically
 				incidents := scenarios.GetAvailableIncidents()
 				var items []string
@@ -70,7 +96,7 @@ You can use it in sandbox mode or point it at your own project (BYOP) to break y
 				if scenario == "Back" {
 					continue
 				}
-				startCmd.Run(startCmd, []string{incidents[idx].ID})
+				startCmd.Run(startCmd, []string{incidents[idx].ID, modeStr})
 				return
 			case "Break Current Project (BYOP Mode)":
 				levelPrompt := promptui.Select{
@@ -109,6 +135,10 @@ You can use it in sandbox mode or point it at your own project (BYOP) to break y
 }
 
 func Execute() {
+	if err := db.InitDB(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize database: %v\n", err)
+	}
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

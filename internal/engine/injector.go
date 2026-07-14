@@ -40,6 +40,9 @@ func (i *Injector) InjectFailure(level scenarios.Difficulty) error {
 	} else if i.Stack.HasTerraform && len(i.Stack.TerraformFiles) > 0 {
 		targetFile = i.Stack.TerraformFiles[0]
 		injectionFunc = injectTerraformFailure
+	} else if i.Stack.HasCompose && len(i.Stack.ComposeFiles) > 0 {
+		targetFile = i.Stack.ComposeFiles[0]
+		injectionFunc = injectComposeFailure
 	} else {
 		return fmt.Errorf("no suitable targets found for failure injection in this project")
 	}
@@ -78,6 +81,7 @@ func (i *Injector) InjectFailure(level scenarios.Difficulty) error {
 		StartTime:            time.Now(),
 		VerificationAttempts: 0,
 		HintLevel:            0,
+		Mode:                 "normal", // BYOP default mode
 	})
 	if err != nil {
 		fmt.Printf("⚠️  Warning: Failed to save session state: %v\n", err)
@@ -141,5 +145,20 @@ func injectTerraformFailure(filePath string) error {
 	
 	// Inject invalid syntax at the top
 	broken := "resource \"aws_s3_bucket\" \"broken\" {\n  bucket = \"my-bucket\"\n  # DOJO INJECTED FAILURE (Missing closing brace)\n\n" + string(content)
+	return os.WriteFile(filePath, []byte(broken), 0644)
+}
+
+func injectComposeFailure(filePath string) error {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+	
+	// Basic injection for docker-compose: messes up ports or image name
+	broken := strings.Replace(string(content), "ports:", "ports:\n      - \"9999:9999\" # DOJO INJECTED: Port conflict/override\n", 1)
+	if broken == string(content) {
+		// fallback if ports: doesn't exist
+		broken = string(content) + "\n# DOJO INJECTED FAILURE\n    command: [\"false\"]\n"
+	}
 	return os.WriteFile(filePath, []byte(broken), 0644)
 }

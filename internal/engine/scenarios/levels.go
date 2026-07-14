@@ -104,5 +104,21 @@ func GetAvailableIncidents() []Incident {
 			Difficulty:  Medium,
 			TargetType:  "terraform",
 		},
+		
+		// Infrastructure / Compose Scenarios
+		{
+			ID:          "nginx-bad-gateway",
+			Name:        "[Nginx] 502 Bad Gateway",
+			Description: "Modifies the nginx.conf proxy_pass directive to point to a non-existent upstream service.",
+			Difficulty:  Medium,
+			TargetType:  "docker-compose",
+		},
+		{
+			ID:          "postgres-max-connections",
+			Name:        "[PostgreSQL] Connection Refused",
+			Description: "Lowers max_connections in Postgres to 1, causing the app to immediately fail to connect.",
+			Difficulty:  Hard,
+			TargetType:  "docker-compose",
+		},
 	}
 }

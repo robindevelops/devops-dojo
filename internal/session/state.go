@@ -14,6 +14,7 @@ type State struct {
 	StartTime            time.Time `json:"start_time"`
 	VerificationAttempts int       `json:"verification_attempts"`
 	HintLevel            int       `json:"hint_level"` // 0=none, 1=vague, 2=direction, 3=command, 4=root cause
+	Mode                 string    `json:"mode"`       // "normal", "timed", "blind", "interview"
 }
 
 // LoadState reads the local state file, returning nil if it doesn't exist

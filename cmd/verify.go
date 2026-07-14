@@ -8,6 +8,8 @@ import (
 	"github.com/devops-dojo/cli/internal/engine"
 	"github.com/devops-dojo/cli/internal/session"
 	"github.com/devops-dojo/cli/internal/colors"
+	"github.com/devops-dojo/cli/internal/db"
+	"github.com/devops-dojo/cli/internal/sensei"
 	"github.com/briandowns/spinner"
 )
 
@@ -38,10 +40,31 @@ var verifyCmd = &cobra.Command{
 		}
 
 		if fixed {
+			state, err := session.LoadState()
+			if err == nil && state != nil {
+				if state.Mode == "timed" && time.Since(state.StartTime) > 5*time.Minute {
+					fmt.Println(colors.Colorize(colors.Red, "\n⏰ Time's up! You fixed it, but took longer than 5 minutes. Session failed."))
+					
+					db.SaveSession(db.SessionRecord{
+						IncidentID:       state.ActiveIncidentID,
+						Difficulty:       "unknown",
+						Mode:             state.Mode,
+						StartTime:        state.StartTime,
+						EndTime:          time.Now(),
+						Status:           "failed",
+						HintsUsed:        state.HintLevel,
+						TimeTakenSeconds: int(time.Since(state.StartTime).Seconds()),
+						XPGained:         0,
+					})
+					session.ClearState()
+					return
+				}
+			}
+
 			fmt.Println(colors.Colorize(colors.Green, "\n🎉 Congratulations! You have successfully resolved the incident. You are a Chaos Master!"))
 			
 			// Scoring logic
-			state, err := session.LoadState()
+			state, err = session.LoadState()
 			if err == nil && state != nil {
 				timeElapsed := time.Since(state.StartTime).Minutes()
 				baseScore := 100
@@ -59,7 +82,37 @@ var verifyCmd = &cobra.Command{
 				fmt.Printf("💡 Hints used: %d (-%d points)\n", state.HintLevel, hintPenalty)
 				fmt.Printf("🏆 Points Earned: %d\n", finalScore)
 
-				session.AddScore(finalScore, state.HintLevel)
+				db.SaveSession(db.SessionRecord{
+					IncidentID:       state.ActiveIncidentID,
+					Difficulty:       "unknown", // To be updated if we track difficulty in state
+					Mode:             state.Mode,
+					StartTime:        state.StartTime,
+					EndTime:          time.Now(),
+					Status:           "resolved",
+					HintsUsed:        state.HintLevel,
+					TimeTakenSeconds: int(time.Since(state.StartTime).Seconds()),
+					XPGained:         finalScore,
+				})
+
+				// Post-Mortem AI Review
+				sessionData := map[string]interface{}{
+					"incident": state.ActiveIncidentID,
+					"mode": state.Mode,
+					"time_taken_minutes": timeElapsed,
+					"hints_used": state.HintLevel,
+					"score": finalScore,
+				}
+				fmt.Println(colors.Colorize(colors.Blue, "\n🤖 Generating Post-Mortem Review with Sensei AI..."))
+				
+				// Need to import sensei in verify.go if not already imported
+				// Let's assume it's imported or I will add it
+				pm, pmErr := sensei.GeneratePostMortem(sessionData)
+				if pmErr == nil {
+					fmt.Printf("\n%s\n%s\n", colors.Colorize(colors.Magenta, "📝 Post-Mortem:"), colors.Colorize(colors.Cyan, pm))
+				} else {
+					fmt.Printf(colors.Colorize(colors.Yellow, "⚠️ Could not generate post-mortem: %v\n"), pmErr)
+				}
+
 				session.ClearState() // End the active session
 			}
 		} else {

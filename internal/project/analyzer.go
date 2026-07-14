@@ -15,6 +15,8 @@ type Stack struct {
 	HasGitHubActions bool
 	HasTerraform     bool
 	TerraformFiles   []string
+	HasCompose       bool
+	ComposeFiles     []string
 }
 
 // Analyze scans the given directory path to detect the project stack
@@ -23,6 +25,7 @@ func Analyze(dirPath string, focus string) (*Stack, error) {
 		Dockerfiles:  []string{},
 		K8sManifests: []string{},
 		TerraformFiles: []string{},
+		ComposeFiles: []string{},
 	}
 
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
@@ -44,8 +47,10 @@ func Analyze(dirPath string, focus string) (*Stack, error) {
 			stack.HasDocker = true
 			stack.Dockerfiles = append(stack.Dockerfiles, path)
 		} else if strings.HasSuffix(baseName, ".yaml") || strings.HasSuffix(baseName, ".yml") {
-			// Naive check for K8s vs other yaml
-			if !strings.Contains(path, ".github/workflows") {
+			if strings.Contains(strings.ToLower(baseName), "docker-compose") {
+				stack.HasCompose = true
+				stack.ComposeFiles = append(stack.ComposeFiles, path)
+			} else if !strings.Contains(path, ".github/workflows") {
 				stack.HasKubernetes = true
 				stack.K8sManifests = append(stack.K8sManifests, path)
 			} else {
@@ -75,6 +80,10 @@ func Analyze(dirPath string, focus string) (*Stack, error) {
 		if focusLower != "terraform" && focusLower != "tf" {
 			stack.HasTerraform = false
 			stack.TerraformFiles = nil
+		}
+		if focusLower != "compose" && focusLower != "docker-compose" {
+			stack.HasCompose = false
+			stack.ComposeFiles = nil
 		}
 	}
 

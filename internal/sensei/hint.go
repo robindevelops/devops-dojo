@@ -15,6 +15,11 @@ func ProvideHint() {
 		return
 	}
 
+	if state.Mode == "blind" {
+		fmt.Println(colors.Colorize(colors.Red, "🙈 Blind Debugging Mode is ACTIVE! Sensei will not help you here. Good luck!"))
+		return
+	}
+
 	fmt.Println(colors.Colorize(colors.Cyan, "Sensei is analyzing your progress..."))
 
 	// Escalate hint level
