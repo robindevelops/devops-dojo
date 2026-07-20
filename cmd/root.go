@@ -36,6 +36,7 @@ You can use it in sandbox mode or point it at your own project (BYOP) to break y
 				Items: []string{
 					"Start Sandbox Scenario",
 					"Break Current Project (BYOP Mode)",
+					"Talk to Dojo AI",
 					"Verify Fix",
 					"Get a Hint",
 					"View Stats",
@@ -110,6 +111,9 @@ You can use it in sandbox mode or point it at your own project (BYOP) to break y
 				// Override level for break command
 				level = levelResult
 				breakCmd.Run(breakCmd, []string{})
+				return
+			case "Talk to Dojo AI":
+				agentCmd.RunE(agentCmd, []string{})
 				return
 			case "Verify Fix":
 				verifyCmd.Run(verifyCmd, []string{})
